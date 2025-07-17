@@ -170,6 +170,43 @@ def display_image(filename):
     flash('Displaying image on e-ink screen...', 'info')
     return redirect(url_for('index'))
 
+@app.route('/rotate/<filename>/<direction>')
+def rotate_image(filename, direction):
+    """Rotate an image clockwise or counterclockwise."""
+    if direction not in ['cw', 'ccw']:
+        flash('Invalid rotation direction', 'error')
+        return redirect(url_for('index'))
+    
+    image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    thumbnail_path = os.path.join(THUMBNAILS_FOLDER, f"thumb_{filename}")
+    
+    if not os.path.exists(image_path):
+        flash('Image not found', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Rotate the main image
+        with Image.open(image_path) as img:
+            if direction == 'cw':
+                rotated_img = img.rotate(-90, expand=True)  # PIL rotate uses counter-clockwise positive
+                flash(f'Image rotated clockwise', 'success')
+            else:  # ccw
+                rotated_img = img.rotate(90, expand=True)
+                flash(f'Image rotated counter-clockwise', 'success')
+            
+            # Save the rotated image
+            rotated_img.save(image_path)
+        
+        # Regenerate thumbnail
+        if os.path.exists(thumbnail_path):
+            os.remove(thumbnail_path)
+        create_thumbnail(image_path, thumbnail_path)
+        
+    except Exception as e:
+        flash(f'Error rotating image: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
 @app.route('/delete/<filename>')
 def delete_image(filename):
     """Delete an uploaded image."""
@@ -347,6 +384,7 @@ if __name__ == '__main__':
             display: flex;
             gap: 0.5rem;
             margin-top: 1rem;
+            flex-wrap: wrap;
         }
         
         .btn-display {
@@ -364,6 +402,17 @@ if __name__ == '__main__':
         
         .btn-delete:hover {
             background-color: #c0392b;
+        }
+        
+        .btn-rotate {
+            background-color: #9b59b6;
+            padding: 0.75rem 1rem;
+            font-size: 1.2rem;
+            min-width: auto;
+        }
+        
+        .btn-rotate:hover {
+            background-color: #8e44ad;
         }
         
         .current-image {
@@ -388,6 +437,12 @@ if __name__ == '__main__':
             font-size: 0.8rem;
             text-align: right;
             color: #666;
+        }
+        
+        .rotation-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
         }
         
         @media (max-width: 768px) {
@@ -446,6 +501,15 @@ if __name__ == '__main__':
                                min="0" max="1" step="0.1" value="0.5"
                                onchange="updateSaturationValue({{ loop.index }}, this.value)">
                         <div class="saturation-value" id="saturation-value-{{ loop.index }}">0.5</div>
+                    </div>
+                    
+                    <div class="rotation-controls">
+                        <button class="btn-rotate" onclick="window.location.href='{{ url_for('rotate_image', filename=image.filename, direction='ccw') }}'" title="Rotate counter-clockwise">
+                            ↺
+                        </button>
+                        <button class="btn-rotate" onclick="window.location.href='{{ url_for('rotate_image', filename=image.filename, direction='cw') }}'" title="Rotate clockwise">
+                            ↻
+                        </button>
                     </div>
                     
                     <div class="image-actions">
