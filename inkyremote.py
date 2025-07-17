@@ -364,6 +364,18 @@ if __name__ == '__main__':
             background-color: #8e44ad;
         }
         
+        .btn-zoom {
+            background-color: #34495e;
+            color: white;
+            padding: 0.5rem 0.8rem;
+            font-size: 1rem;
+            min-width: 40px;
+        }
+        
+        .btn-zoom:hover {
+            background-color: #2c3e50;
+        }
+        
         .crop-container {
             display: none;
             background: white;
@@ -373,10 +385,18 @@ if __name__ == '__main__':
             margin-bottom: 2rem;
         }
         
+        .crop-preview-container {
+            width: 100%;
+            height: 500px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
         .crop-preview {
             max-width: 100%;
-            max-height: 400px;
-            margin-bottom: 1rem;
+            max-height: 100%;
         }
         
         .crop-controls {
@@ -387,13 +407,13 @@ if __name__ == '__main__':
             flex-wrap: wrap;
         }
         
-        .rotation-controls {
+        .rotation-controls, .zoom-controls {
             display: flex;
             gap: 0.5rem;
             align-items: center;
         }
         
-        .rotation-label {
+        .control-label {
             font-weight: 500;
             color: #666;
         }
@@ -554,14 +574,20 @@ if __name__ == '__main__':
             <div class="crop-info">
                 <p>Crop and rotate your image to fit the 800x480 e-ink display (5:3 aspect ratio)</p>
             </div>
-            <div>
+            <div class="crop-preview-container">
                 <img id="crop-image" class="crop-preview">
             </div>
             <div class="crop-controls">
                 <div class="rotation-controls">
-                    <span class="rotation-label">Rotate:</span>
+                    <span class="control-label">Rotate:</span>
                     <button type="button" class="btn btn-rotate" id="rotate-left" title="Rotate left">↺</button>
                     <button type="button" class="btn btn-rotate" id="rotate-right" title="Rotate right">↻</button>
+                </div>
+                <div class="zoom-controls">
+                    <span class="control-label">Zoom:</span>
+                    <button type="button" class="btn btn-zoom" id="zoom-in" title="Zoom in">+</button>
+                    <button type="button" class="btn btn-zoom" id="zoom-out" title="Zoom out">-</button>
+                    <button type="button" class="btn btn-zoom" id="reset-zoom" title="Reset zoom">⌂</button>
                 </div>
                 <button type="button" class="btn btn-success" id="crop-and-upload">Crop & Upload</button>
                 <button type="button" class="btn btn-secondary" id="cancel-crop">Cancel</button>
@@ -619,6 +645,13 @@ if __name__ == '__main__':
             window.location.href = "{{ url_for('display_image', filename='FILENAME') }}".replace('FILENAME', filename) + '?saturation=' + saturation;
         }
         
+        function resetCropperView() {
+            if (cropper) {
+                cropper.reset();
+                cropper.zoom(0);
+            }
+        }
+        
         // Handle file selection
         document.getElementById('file-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -641,9 +674,9 @@ if __name__ == '__main__':
                     
                     cropper = new Cropper(cropImage, {
                         aspectRatio: 800 / 480,
-                        viewMode: 1,
+                        viewMode: 0,  // Changed from 1 to 0 for more flexibility
                         responsive: true,
-                        autoCropArea: 1,
+                        autoCropArea: 0.8,  // Reduced from 1 to 0.8
                         guides: true,
                         center: true,
                         highlight: false,
@@ -653,6 +686,16 @@ if __name__ == '__main__':
                         rotatable: true,
                         scalable: true,
                         zoomable: true,
+                        minContainerWidth: 200,
+                        minContainerHeight: 100,
+                        checkCrossOrigin: false,
+                        zoomOnTouch: false,
+                        zoomOnWheel: false,
+                        wheelZoomRatio: 0.1,
+                        ready: function() {
+                            // Auto-fit the image after initialization
+                            this.cropper.zoom(0);
+                        }
                     });
                 };
                 reader.readAsDataURL(file);
@@ -664,6 +707,10 @@ if __name__ == '__main__':
             if (cropper) {
                 cropper.rotate(-90);
                 currentRotation -= 90;
+                // Reset zoom after rotation to fit the rotated image
+                setTimeout(() => {
+                    cropper.zoom(0);
+                }, 100);
             }
         });
         
@@ -671,6 +718,30 @@ if __name__ == '__main__':
             if (cropper) {
                 cropper.rotate(90);
                 currentRotation += 90;
+                // Reset zoom after rotation to fit the rotated image
+                setTimeout(() => {
+                    cropper.zoom(0);
+                }, 100);
+            }
+        });
+        
+        // Zoom controls
+        document.getElementById('zoom-in').addEventListener('click', function() {
+            if (cropper) {
+                cropper.zoom(0.1);
+            }
+        });
+        
+        document.getElementById('zoom-out').addEventListener('click', function() {
+            if (cropper) {
+                cropper.zoom(-0.1);
+            }
+        });
+        
+        document.getElementById('reset-zoom').addEventListener('click', function() {
+            if (cropper) {
+                cropper.reset();
+                cropper.zoom(0);
             }
         });
         
