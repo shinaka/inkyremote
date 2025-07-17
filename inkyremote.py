@@ -60,6 +60,10 @@ def crop_image(image_path, crop_data):
     """Crop image based on crop coordinates and resize to display resolution."""
     try:
         with Image.open(image_path) as img:
+            # Apply rotation if specified
+            if 'rotate' in crop_data and crop_data['rotate'] != 0:
+                img = img.rotate(-crop_data['rotate'], expand=True)
+            
             # Extract crop coordinates
             x = int(crop_data['x'])
             y = int(crop_data['y'])
@@ -347,6 +351,18 @@ if __name__ == '__main__':
             background-color: #7f8c8d;
         }
         
+        .btn-rotate {
+            background-color: #9b59b6;
+            color: white;
+            padding: 0.5rem 0.8rem;
+            font-size: 1.2rem;
+            min-width: 40px;
+        }
+        
+        .btn-rotate:hover {
+            background-color: #8e44ad;
+        }
+        
         .crop-container {
             display: none;
             background: white;
@@ -366,6 +382,19 @@ if __name__ == '__main__':
             display: flex;
             gap: 1rem;
             justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .rotation-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .rotation-label {
+            font-weight: 500;
+            color: #666;
         }
         
         .crop-info {
@@ -522,12 +551,17 @@ if __name__ == '__main__':
         
         <div class="crop-container" id="crop-container">
             <div class="crop-info">
-                <p>Crop your image to fit the 800x480 e-ink display (5:3 aspect ratio)</p>
+                <p>Crop and rotate your image to fit the 800x480 e-ink display (5:3 aspect ratio)</p>
             </div>
             <div>
                 <img id="crop-image" class="crop-preview">
             </div>
             <div class="crop-controls">
+                <div class="rotation-controls">
+                    <span class="rotation-label">Rotate:</span>
+                    <button type="button" class="btn btn-rotate" id="rotate-left" title="Rotate left">↺</button>
+                    <button type="button" class="btn btn-rotate" id="rotate-right" title="Rotate right">↻</button>
+                </div>
                 <button type="button" class="btn btn-success" id="crop-and-upload">Crop & Upload</button>
                 <button type="button" class="btn btn-secondary" id="cancel-crop">Cancel</button>
             </div>
@@ -573,6 +607,7 @@ if __name__ == '__main__':
     <script>
         let cropper;
         let originalFile;
+        let currentRotation = 0;
         
         function updateSaturationValue(index, value) {
             document.getElementById('saturation-value-' + index).textContent = value;
@@ -588,6 +623,7 @@ if __name__ == '__main__':
             const file = e.target.files[0];
             if (file) {
                 originalFile = file;
+                currentRotation = 0;
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const cropImage = document.getElementById('crop-image');
@@ -613,9 +649,27 @@ if __name__ == '__main__':
                         cropBoxMovable: true,
                         cropBoxResizable: true,
                         toggleDragModeOnDblclick: false,
+                        rotatable: true,
+                        scalable: true,
+                        zoomable: true,
                     });
                 };
                 reader.readAsDataURL(file);
+            }
+        });
+        
+        // Rotation controls
+        document.getElementById('rotate-left').addEventListener('click', function() {
+            if (cropper) {
+                cropper.rotate(-90);
+                currentRotation -= 90;
+            }
+        });
+        
+        document.getElementById('rotate-right').addEventListener('click', function() {
+            if (cropper) {
+                cropper.rotate(90);
+                currentRotation += 90;
             }
         });
         
@@ -623,6 +677,8 @@ if __name__ == '__main__':
         document.getElementById('crop-and-upload').addEventListener('click', function() {
             if (cropper) {
                 const cropData = cropper.getData();
+                // Add rotation data
+                cropData.rotate = currentRotation;
                 document.getElementById('crop-data').value = JSON.stringify(cropData);
                 document.getElementById('upload-form').submit();
             }
@@ -634,6 +690,7 @@ if __name__ == '__main__':
                 cropper.destroy();
                 cropper = null;
             }
+            currentRotation = 0;
             document.getElementById('crop-container').style.display = 'none';
             document.getElementById('upload-btn').style.display = 'block';
             document.getElementById('file-input').value = '';
