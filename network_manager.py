@@ -36,8 +36,8 @@ class NetworkManager:
                  wifi_interface: str = "wlan0",
                  ap_ssid: str = "InkyRemote",
                  ap_password: str = "inkyremote123",
-                 check_interval: int = 30,
-                 connectivity_timeout: int = 10):
+                 check_interval: int = 60,
+                 connectivity_timeout: int = 5):
         
         self.wifi_interface = wifi_interface
         self.ap_ssid = ap_ssid
@@ -102,27 +102,24 @@ class NetworkManager:
             return False, str(e)
     
     def check_wifi_connectivity(self) -> bool:
-        """Check if WiFi is connected and has internet access."""
-        # Check if interface is up and connected
+        """Check if WiFi is connected (lightweight check)."""
+        # Quick check - if we have an IP address on wlan0, assume WiFi is working
+        # This is much lighter than doing iwconfig + ping tests
+        success, output = self._run_command(
+            f"ip addr show {self.wifi_interface} | grep 'inet.*scope global'", 
+            suppress_errors=True
+        )
+        
+        if success and output:
+            return True
+            
+        # Fallback - check iwconfig if IP check failed
         success, output = self._run_command(
             f"iwconfig {self.wifi_interface}", 
             suppress_errors=True
         )
         
-        if not success or "ESSID:off" in output:
-            return False
-            
-        # Check for IP address
-        success, output = self._run_command(
-            f"ip addr show {self.wifi_interface} | grep 'inet '", 
-            suppress_errors=True
-        )
-        
-        if not success or not output:
-            return False
-            
-        # Test internet connectivity
-        return self._test_internet_connection()
+        return success and "ESSID:off" not in output
     
     def _test_internet_connection(self) -> bool:
         """Test internet connectivity by pinging a reliable server."""

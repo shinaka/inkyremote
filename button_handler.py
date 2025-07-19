@@ -183,7 +183,7 @@ class ButtonHandler:
                         logger.error(f"Error reading GPIO events: {e}")
                 
                 # Small sleep to prevent busy waiting
-                time.sleep(0.1)
+                time.sleep(0.5)
                         
         except Exception as e:
             logger.error(f"Error in button monitoring loop: {e}")
