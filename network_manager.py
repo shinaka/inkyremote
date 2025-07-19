@@ -337,9 +337,8 @@ class NetworkManager:
             return NetworkStatus(mode=self._current_mode)
     
     def switch_to_ap_mode(self, manual: bool = False) -> bool:
-        """Switch to Access Point mode."""
-        if manual:
-            self._manual_ap_mode = True
+        """Switch to Access Point mode - BUTTON CONTROL ONLY."""
+        logger.info("Switching to AP mode...")
         
         if self._current_mode == NetworkMode.AP:
             logger.info("Already in AP mode")
@@ -352,14 +351,8 @@ class NetworkManager:
         return success
     
     def switch_to_wifi_mode(self, manual: bool = False) -> bool:
-        """Switch to WiFi mode."""
-        if not manual:
-            # Only reset manual modes if this is an automatic switch
-            self._manual_ap_mode = False
-            self._manual_control = False
-        else:
-            # Keep manual control active but clear manual AP mode
-            self._manual_ap_mode = False
+        """Switch to WiFi mode - BUTTON CONTROL ONLY."""
+        logger.info("Switching to WiFi mode...")
         
         if self._current_mode == NetworkMode.WIFI and self.check_wifi_connectivity():
             logger.info("Already connected to WiFi")
@@ -372,9 +365,8 @@ class NetworkManager:
         return success
     
     def toggle_mode(self) -> bool:
-        """Toggle between WiFi and AP mode."""
-        # Enable manual control to prevent automatic switching
-        self._manual_control = True
+        """Toggle between WiFi and AP mode - BUTTON CONTROL ONLY."""
+        logger.info(f"Toggling mode from {self._current_mode}")
         
         if self._current_mode == NetworkMode.WIFI:
             return self.switch_to_ap_mode(manual=True)
@@ -389,54 +381,14 @@ class NetworkManager:
         return True
     
     def _monitoring_loop(self):
-        """Background monitoring loop."""
-        logger.info("Network monitoring started")
+        """Background monitoring loop - DISABLED for button-only control."""
+        logger.info("Network monitoring disabled - using button control only")
         
+        # Just sleep and do nothing - monitoring is disabled
         while self._should_monitor:
-            try:
-                # Skip monitoring if in manual control mode
-                if self._manual_control or self._manual_ap_mode:
-                    time.sleep(self.check_interval)
-                    continue
-                
-                # Check current connectivity
-                wifi_connected = self.check_wifi_connectivity()
-                
-                if wifi_connected and self._current_mode != NetworkMode.WIFI:
-                    # WiFi is available but we're not using it
-                    logger.info("WiFi connectivity detected, switching from AP mode")
-                    if self.connect_to_wifi():
-                        status = self.get_current_status()
-                        self._notify_status_change(status)
-                
-                elif not wifi_connected and self._current_mode == NetworkMode.WIFI:
-                    # WiFi lost, switch to AP mode
-                    logger.info("WiFi connectivity lost, switching to AP mode")
-                    if self.start_access_point():
-                        status = self.get_current_status()
-                        self._notify_status_change(status)
-                
-                elif self._current_mode == NetworkMode.UNKNOWN:
-                    # Try to determine current state
-                    if wifi_connected:
-                        self._current_mode = NetworkMode.WIFI
-                    else:
-                        # Try to start AP mode
-                        self.start_access_point()
-                    
-                    status = self.get_current_status()
-                    self._notify_status_change(status)
-                
-                # Periodic status update
-                status = self.get_current_status()
-                self._notify_status_change(status)
-                
-            except Exception as e:
-                logger.error(f"Error in monitoring loop: {e}")
-            
-            time.sleep(self.check_interval)
+            time.sleep(60)  # Long sleep since we're not doing anything
         
-        logger.info("Network monitoring stopped")
+        logger.info("Network monitoring thread stopped")
     
     def start_monitoring(self):
         """Start background network monitoring."""
@@ -457,25 +409,23 @@ class NetworkManager:
         logger.info("Network monitoring stopped")
     
     def initialize(self) -> bool:
-        """Initialize network manager and determine current state."""
-        logger.info("Initializing NetworkManager...")
+        """Initialize network manager and determine current state - BUTTON CONTROL ONLY."""
+        logger.info("Initializing NetworkManager in button-control mode...")
         
-        # Check current state
+        # Just detect current state without auto-switching
         if self.check_wifi_connectivity():
             self._current_mode = NetworkMode.WIFI
-            logger.info("Currently connected to WiFi")
+            logger.info("Currently connected to WiFi - ready for button control")
         else:
-            logger.info("No WiFi connectivity, starting AP mode")
-            if self.start_access_point():
-                self._current_mode = NetworkMode.AP
-            else:
-                logger.error("Failed to initialize any network mode")
-                return False
+            self._current_mode = NetworkMode.UNKNOWN
+            logger.info("No WiFi connectivity detected - ready for button control")
+            logger.info("Use buttons to switch to WiFi or AP mode")
         
         # Notify initial status
         status = self.get_current_status()
         self._notify_status_change(status)
         
+        logger.info("Network manager ready - automatic switching DISABLED")
         return True
 
 # Global network manager instance
