@@ -136,11 +136,13 @@ emergency_wifi_restore() {
     systemctl stop hostapd 2>/dev/null || true
     systemctl stop dnsmasq 2>/dev/null || true
     
-    # Flush interface
+    # Reset interface completely
+    ip link set wlan0 down 2>/dev/null || true
     ip addr flush dev wlan0 2>/dev/null || true
+    ip link set wlan0 up 2>/dev/null || true
     
     # Restart WiFi services
-    systemctl restart dhcpcd
+    systemctl restart networking
     systemctl restart wpa_supplicant
     
     # Wait for connection
@@ -307,8 +309,15 @@ test_network_switching_full() {
         echo "$(date): Restoring WiFi mode..." >> /var/log/network-test.log
         systemctl stop hostapd
         systemctl stop dnsmasq
+        
+        # Reset interface completely
+        ip link set wlan0 down
         ip addr flush dev wlan0
+        ip link set wlan0 up
+        
+        # Restart WiFi services
         systemctl restart networking
+        systemctl restart wpa_supplicant
         
         # Try dhclient directly as backup
         dhclient -r wlan0 2>/dev/null || true
@@ -344,9 +353,11 @@ emergency_wifi_fix() {
     pkill -f "network_manager.py" 2>/dev/null || true
     pkill -f "button_handler.py" 2>/dev/null || true
     
-    # Flush network interface
+    # Completely reset network interface
+    ip link set wlan0 down 2>/dev/null || true
     ip addr flush dev wlan0 2>/dev/null || true
     ip route flush dev wlan0 2>/dev/null || true
+    ip link set wlan0 up 2>/dev/null || true
     
     # Restart core networking
     systemctl restart networking

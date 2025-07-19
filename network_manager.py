@@ -189,21 +189,23 @@ class NetworkManager:
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop any existing WiFi connections
+            # COMPLETELY stop WiFi services first
+            logger.info("Stopping WiFi services...")
+            self._run_command("sudo systemctl stop wpa_supplicant", suppress_errors=True)
+            self._run_command("sudo systemctl stop networking", suppress_errors=True) 
             self._run_command("sudo wpa_cli -i wlan0 disconnect", suppress_errors=True)
-            time.sleep(2)
+            self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
+            time.sleep(3)
             
-            # Configure static IP for AP mode
-            success, _ = self._run_command(
-                f"sudo ip addr flush dev {self.wifi_interface}"
-            )
-            if not success:
-                logger.error("Failed to flush interface")
-                return False
+            # COMPLETELY flush and reset the interface
+            logger.info("Resetting network interface...")
+            success, _ = self._run_command(f"sudo ip link set {self.wifi_interface} down")
+            success, _ = self._run_command(f"sudo ip addr flush dev {self.wifi_interface}")
+            success, _ = self._run_command(f"sudo ip link set {self.wifi_interface} up")
+            time.sleep(2)
                 
-            success, _ = self._run_command(
-                f"sudo ip addr add 192.168.4.1/24 dev {self.wifi_interface}"
-            )
+            # Set static IP for AP mode
+            success, _ = self._run_command(f"sudo ip addr add 192.168.4.1/24 dev {self.wifi_interface}")
             if not success:
                 logger.error("Failed to set static IP")
                 return False
@@ -240,12 +242,18 @@ class NetworkManager:
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop services
+            # Stop AP services
+            logger.info("Stopping AP services...")
             self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
             self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
+            time.sleep(2)
             
-            # Flush IP configuration
+            # Reset network interface completely
+            logger.info("Resetting network interface...")
+            self._run_command(f"sudo ip link set {self.wifi_interface} down", suppress_errors=True)
             self._run_command(f"sudo ip addr flush dev {self.wifi_interface}", suppress_errors=True)
+            self._run_command(f"sudo ip link set {self.wifi_interface} up", suppress_errors=True)
+            time.sleep(2)
             
             logger.info("Access Point mode stopped")
             return True
@@ -257,12 +265,25 @@ class NetworkManager:
     def connect_to_wifi(self) -> bool:
         """Attempt to connect to WiFi."""
         logger.info("Attempting to connect to WiFi...")
+        
+        # Check if we need to stop AP mode BEFORE changing the mode
+        was_ap_mode = (self._current_mode == NetworkMode.AP)
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop AP mode if running
-            if self._current_mode == NetworkMode.AP:
+            # Stop AP mode if it was running
+            if was_ap_mode:
+                logger.info("Stopping AP mode before switching to WiFi...")
                 self.stop_access_point()
+            else:
+                # Still stop any potentially running AP services
+                logger.info("Ensuring AP services are stopped...")
+                self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
+                self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
+            
+            # Start WiFi services
+            logger.info("Starting WiFi services...")
+            self._run_command("sudo systemctl start wpa_supplicant", suppress_errors=True)
             
             # Restart networking services (adapt for dhclient system)
             success, _ = self._run_command("sudo systemctl restart networking")
@@ -274,7 +295,7 @@ class NetworkManager:
                     logger.warning("Failed to restart networking services")
             
             # Wait a moment for networking to initialize
-            time.sleep(3)
+            time.sleep(5)
             
             # Try to reconnect to WiFi
             success, _ = self._run_command("sudo wpa_cli -i wlan0 reconnect")

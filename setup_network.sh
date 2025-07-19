@@ -257,10 +257,14 @@ jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart hostapd
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl start dnsmasq
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop dnsmasq
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart dnsmasq
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl start wpa_supplicant
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop wpa_supplicant
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart wpa_supplicant
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl start networking
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop networking
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart networking
 jweinhart ALL=(root) NOPASSWD: /sbin/dhclient *
-jweinhart ALL=(root) NOPASSWD: /sbin/ip addr *
-jweinhart ALL=(root) NOPASSWD: /sbin/ip route *
+jweinhart ALL=(root) NOPASSWD: /sbin/ip *
 jweinhart ALL=(root) NOPASSWD: /usr/sbin/wpa_cli *
 jweinhart ALL=(root) NOPASSWD: /sbin/sysctl net.ipv4.ip_forward=1
 EOF
