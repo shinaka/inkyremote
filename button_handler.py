@@ -31,14 +31,14 @@ class ButtonHandler:
     """Handles GPIO button presses for the Spectra6 E-Ink display."""
     
     def __init__(self):
-        # GPIO pins for each button (from the example)
+        # GPIO pins for each button (these may need to be adjusted for your specific display)
         # These correspond to buttons A, B, C and D respectively
         self.SW_A = 5
         self.SW_B = 6
-        self.SW_C = 16  # Use 25 if you have a 13.3" display
+        self.SW_C = 16  # Use 25 if you have a 13.3" display or different revision
         self.SW_D = 24
         
-        # Button configurations
+        # Button configurations (simplified - all immediate press actions)
         self.button_configs = {
             self.SW_A: ButtonConfig(
                 gpio_pin=self.SW_A,
@@ -56,13 +56,13 @@ class ButtonHandler:
                 gpio_pin=self.SW_C,
                 label="C",
                 action=ButtonAction.WIFI_MODE,
-                hold_time=1.0  # Hold for 1 second
+                hold_time=0.0  # Simplified to immediate press
             ),
             self.SW_D: ButtonConfig(
                 gpio_pin=self.SW_D,
                 label="D",
                 action=ButtonAction.AP_MODE,
-                hold_time=1.0  # Hold for 1 second
+                hold_time=0.0  # Simplified to immediate press
             )
         }
         
@@ -80,7 +80,6 @@ class ButtonHandler:
         
         # Callbacks
         self._button_callbacks = {}
-        self._press_start_times = {}
         
         # Rate limiting
         self._last_press_times = {}
@@ -115,7 +114,7 @@ class ButtonHandler:
         return True
     
     def _handle_button_press(self, event):
-        """Handle button press events."""
+        """Handle button press events (simplified approach like Pimoroni example)."""
         try:
             # Get button info
             gpio_number = self.buttons[self.offsets.index(event.line_offset)]
@@ -127,37 +126,12 @@ class ButtonHandler:
             
             logger.info(f"Button {config.label} pressed (GPIO {gpio_number})")
             
-            # Handle different press types
-            if config.hold_time > 0:
-                # For hold buttons, start timing
-                self._press_start_times[gpio_number] = time.time()
-            else:
-                # For immediate action buttons
-                self._execute_callback(config.action, config.label)
+            # For simplicity, treat all buttons as immediate press (no hold detection for now)
+            # This matches the working Pimoroni example behavior
+            self._execute_callback(config.action, config.label)
                 
         except Exception as e:
             logger.error(f"Error handling button press: {e}")
-    
-    def _handle_button_release(self, event):
-        """Handle button release events."""
-        try:
-            # Get button info
-            gpio_number = self.buttons[self.offsets.index(event.line_offset)]
-            config = self.button_configs[gpio_number]
-            
-            # Check if this was a held button
-            if gpio_number in self._press_start_times:
-                press_duration = time.time() - self._press_start_times[gpio_number]
-                del self._press_start_times[gpio_number]
-                
-                if press_duration >= config.hold_time:
-                    logger.info(f"Button {config.label} held for {press_duration:.1f}s")
-                    self._execute_callback(config.action, config.label)
-                else:
-                    logger.debug(f"Button {config.label} not held long enough ({press_duration:.1f}s < {config.hold_time}s)")
-                    
-        except Exception as e:
-            logger.error(f"Error handling button release: {e}")
     
     def _monitoring_loop(self):
         """Main button monitoring loop."""
@@ -165,28 +139,10 @@ class ButtonHandler:
         
         try:
             while self._should_monitor:
-                # Read edge events (no timeout parameter for compatibility)
-                try:
-                    events = self.request.read_edge_events()
-                    
-                    for event in events:
-                        if event.event_type == Edge.FALLING:
-                            # Button pressed (falling edge due to pull-up)
-                            self._handle_button_press(event)
-                        elif event.event_type == Edge.RISING:
-                            # Button released (rising edge due to pull-up)
-                            self._handle_button_release(event)
-                            
-                except Exception as e:
-                    # Handle case where no events are available
-                    logger.debug(f"GPIO event read exception: {e}")
-                    if "would block" not in str(e).lower() and "timeout" not in str(e).lower():
-                        logger.error(f"Error reading GPIO events: {e}")
-                        # Break the loop on serious errors to prevent silent failures
-                        break
-                
-                # Small sleep to prevent busy waiting
-                time.sleep(0.5)
+                # Simple event reading (matches working Pimoroni example)
+                for event in self.request.read_edge_events():
+                    # Only handle falling edge (button press) since we configured FALLING only
+                    self._handle_button_press(event)
                         
         except Exception as e:
             logger.error(f"Error in button monitoring loop: {e}")
@@ -204,10 +160,11 @@ class ButtonHandler:
             logger.info(f"Using GPIO chip: {self.chip}")
             
             # Create settings for input pins with pull-up and edge detection
+            # Use FALLING edge only (matches working Pimoroni example)
             input_settings = gpiod.LineSettings(
                 direction=Direction.INPUT, 
                 bias=Bias.PULL_UP, 
-                edge_detection=Edge.BOTH  # Detect both falling and rising edges
+                edge_detection=Edge.FALLING  # Only detect button press (falling edge)
             )
             
             # Build configuration for each button
@@ -223,8 +180,7 @@ class ButtonHandler:
             logger.info("Button GPIO initialized successfully")
             logger.info("Button mappings:")
             for button, config in self.button_configs.items():
-                hold_info = f" (hold {config.hold_time}s)" if config.hold_time > 0 else " (press)"
-                logger.info(f"  Button {config.label} (GPIO {button}): {config.action.value}{hold_info}")
+                logger.info(f"  Button {config.label} (GPIO {button}): {config.action.value} (press)")
                 
             return True
             
@@ -285,8 +241,7 @@ class ButtonHandler:
         print(f"Testing buttons for {duration} seconds...")
         print(f"Button mappings:")
         for config in self.button_configs.values():
-            hold_info = f" (hold {config.hold_time}s)" if config.hold_time > 0 else " (single press)"
-            print(f"  Button {config.label}: {config.action.value}{hold_info}")
+            print(f"  Button {config.label}: {config.action.value} (single press)")
         print(f"Press Ctrl+C to exit early\n")
         
         def test_callback(action_name: str, button_label: str):
