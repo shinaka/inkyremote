@@ -256,31 +256,41 @@ def get_image_list():
     return images
 
 def display_image_on_eink(image_path, saturation=0.5):
-    """Display an image on the e-ink display."""
+    """Display an image on the e-ink display using the unified DisplayManager."""
     global current_display_image
     
     with display_lock:
         try:
-            # Initialize the display
-            inky = auto(ask_user=False, verbose=True)
+            # Try to use the DisplayManager first (unified approach)
+            success = display_manager.display_image(image_path, saturation)
             
-            # Open and resize the image
-            image = Image.open(image_path)
-            resized_image = image.resize(inky.resolution)
-            
-            # Set the image on the display
-            try:
-                inky.set_image(resized_image, saturation=saturation)
-            except TypeError:
-                # Fallback for displays that don't support saturation
-                inky.set_image(resized_image)
-            
-            # Update the display
-            inky.show()
-            
-            current_display_image = os.path.basename(image_path)
-            return True, "Image displayed successfully"
-            
+            if success:
+                current_display_image = os.path.basename(image_path)
+                return True, "Image displayed successfully"
+            else:
+                # Fallback to direct display if DisplayManager fails
+                logger.warning("DisplayManager failed, trying direct display...")
+                
+                # Initialize the display directly as fallback
+                inky = auto(ask_user=False, verbose=True)
+                
+                # Open and resize the image
+                image = Image.open(image_path)
+                resized_image = image.resize(inky.resolution)
+                
+                # Set the image on the display
+                try:
+                    inky.set_image(resized_image, saturation=saturation)
+                except TypeError:
+                    # Fallback for displays that don't support saturation
+                    inky.set_image(resized_image)
+                
+                # Update the display
+                inky.show()
+                
+                current_display_image = os.path.basename(image_path)
+                return True, "Image displayed successfully (fallback mode)"
+                
         except Exception as e:
             return False, f"Error displaying image: {str(e)}"
 

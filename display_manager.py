@@ -390,6 +390,30 @@ class DisplayManager:
         
         return self.show_message(title, message, message_type, duration=5.0)
     
+    def display_image(self, image_path: str, saturation: float = 0.5) -> bool:
+        """Display an image file directly on the E-Ink screen."""
+        logger.info(f"Displaying image: {image_path}")
+        
+        # Ensure display is initialized
+        if not self._display:
+            logger.warning("Display not initialized, attempting to initialize...")
+            if not self.initialize_display():
+                logger.error("Failed to initialize display for image display")
+                return False
+        
+        try:
+            # Open and process the image
+            image = Image.open(image_path)
+            
+            # Update display using our unified display system
+            success = self._update_display(image, saturation)
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error displaying image: {e}")
+            return False
+
     def test_display(self) -> bool:
         """Test the display with a simple message."""
         return self.show_message(
