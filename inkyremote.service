@@ -1,17 +1,41 @@
 [Unit]
-Description=Inky Remote Web Server
-After=network.target
+Description=Inky Remote Web Server with Network Management
+After=network.target dhcpcd.service
 Wants=network.target
+Before=hostapd.service dnsmasq.service
 
 [Service]
 Type=simple
 User=jweinhart
+Group=jweinhart
 WorkingDirectory=/home/jweinhart/inkyremote
 ExecStartPre=/home/jweinhart/inkyremote/deploy.sh
 ExecStart=/home/jweinhart/.virtualenvs/pimoroni/bin/python inkyremote.py
 Restart=always
-RestartSec=5
+RestartSec=10
+TimeoutStartSec=60
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Environment variables
 Environment=PATH=/home/jweinhart/.virtualenvs/pimoroni/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/home/jweinhart/inkyremote
+Environment=PYTHONUNBUFFERED=1
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/jweinhart/inkyremote
+PrivateTmp=true
+
+# Allow access to GPIO and network interfaces
+SupplementaryGroups=gpio spi i2c netdev
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=inkyremote
 
 [Install]
 WantedBy=multi-user.target

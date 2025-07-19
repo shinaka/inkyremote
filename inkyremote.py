@@ -3,14 +3,25 @@
 import os
 import uuid
 import json
+import atexit
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from PIL import Image
 import threading
 import time
+import logging
 
 # Import the Inky library
 from inky.auto import auto
+
+# Import our network management modules
+from network_manager import network_manager, NetworkStatus, NetworkMode
+from button_handler import button_handler, ButtonAction
+from display_manager import display_manager
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.secret_key = 'your-secret-key-change-this'  # Change this to a random secret key
@@ -33,6 +44,138 @@ os.makedirs('templates', exist_ok=True)
 # Global variable to track current display
 current_display_image = None
 display_lock = threading.Lock()
+
+# Network management state
+network_status = NetworkStatus(mode=NetworkMode.UNKNOWN)
+last_network_mode = NetworkMode.UNKNOWN
+
+# Initialize network components on app startup
+def initialize_network_management():
+    """Initialize all network management components."""
+    logger.info("Initializing network management...")
+    
+    # Initialize display manager
+    if not display_manager.initialize_display():
+        logger.warning("Display manager initialization failed - continuing without display updates")
+    
+    # Initialize button handler
+    if not button_handler.initialize():
+        logger.warning("Button handler initialization failed - continuing without button support")
+    else:
+        # Set up button callbacks
+        setup_button_callbacks()
+        button_handler.start_monitoring()
+    
+    # Initialize network manager
+    if not network_manager.initialize():
+        logger.error("Network manager initialization failed!")
+        return False
+    
+    # Set up network status callback
+    network_manager.add_status_callback(on_network_status_change)
+    
+    # Start network monitoring
+    network_manager.start_monitoring()
+    
+    logger.info("Network management initialized successfully")
+    return True
+
+def setup_button_callbacks():
+    """Set up callbacks for button presses."""
+    
+    def on_network_toggle(button_label: str):
+        logger.info(f"Button {button_label}: Toggling network mode")
+        success = network_manager.toggle_mode()
+        if success:
+            display_manager.show_message(
+                "Network Toggle", 
+                "Switching network mode...", 
+                "info", 
+                duration=3.0
+            )
+        else:
+            display_manager.show_message(
+                "Network Error", 
+                "Failed to toggle network mode", 
+                "error", 
+                duration=5.0
+            )
+    
+    def on_status_display(button_label: str):
+        logger.info(f"Button {button_label}: Showing network status")
+        status = network_manager.get_current_status()
+        display_manager.show_network_status(status)
+    
+    def on_wifi_mode(button_label: str):
+        logger.info(f"Button {button_label}: Forcing WiFi mode")
+        success = network_manager.switch_to_wifi_mode()
+        if success:
+            display_manager.show_message(
+                "WiFi Mode", 
+                "Switching to WiFi mode...", 
+                "info", 
+                duration=3.0
+            )
+        else:
+            display_manager.show_message(
+                "WiFi Error", 
+                "Failed to switch to WiFi mode", 
+                "error", 
+                duration=5.0
+            )
+    
+    def on_ap_mode(button_label: str):
+        logger.info(f"Button {button_label}: Forcing AP mode")
+        success = network_manager.switch_to_ap_mode(manual=True)
+        if success:
+            display_manager.show_message(
+                "AP Mode", 
+                "Switching to Access Point mode...", 
+                "info", 
+                duration=3.0
+            )
+        else:
+            display_manager.show_message(
+                "AP Error", 
+                "Failed to switch to AP mode", 
+                "error", 
+                duration=5.0
+            )
+    
+    # Register button callbacks
+    button_handler.add_button_callback(ButtonAction.NETWORK_TOGGLE, on_network_toggle)
+    button_handler.add_button_callback(ButtonAction.STATUS_DISPLAY, on_status_display)
+    button_handler.add_button_callback(ButtonAction.WIFI_MODE, on_wifi_mode)
+    button_handler.add_button_callback(ButtonAction.AP_MODE, on_ap_mode)
+
+def on_network_status_change(status: NetworkStatus):
+    """Callback for network status changes."""
+    global network_status, last_network_mode
+    
+    logger.info(f"Network status changed: {status.mode.value}")
+    
+    # Check if mode actually changed
+    if status.mode != last_network_mode and last_network_mode != NetworkMode.UNKNOWN:
+        logger.info(f"Network mode changed from {last_network_mode.value} to {status.mode.value}")
+        display_manager.show_connection_change(last_network_mode, status.mode)
+    
+    # Update global state
+    network_status = status
+    last_network_mode = status.mode
+
+def cleanup_network_management():
+    """Clean up network management components."""
+    logger.info("Cleaning up network management...")
+    
+    try:
+        network_manager.stop_monitoring()
+        button_handler.cleanup()
+        logger.info("Network management cleanup completed")
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+# Register cleanup function
+atexit.register(cleanup_network_management)
 
 def allowed_file(filename):
     """Check if the uploaded file has an allowed extension."""
@@ -138,7 +281,18 @@ def display_image_on_eink(image_path, saturation=0.5):
 def index():
     """Main page showing all uploaded images."""
     images = get_image_list()
-    return render_template('index.html', images=images, current_image=current_display_image)
+    
+    # Get current network status for display
+    try:
+        current_network_status = network_manager.get_current_status()
+    except Exception as e:
+        logger.warning(f"Could not get network status: {e}")
+        current_network_status = NetworkStatus(mode=NetworkMode.UNKNOWN)
+    
+    return render_template('index.html', 
+                         images=images, 
+                         current_image=current_display_image,
+                         network_status=current_network_status)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -223,7 +377,79 @@ def delete_image(filename):
     
     return redirect(url_for('index'))
 
+@app.route('/api/network/status')
+def api_network_status():
+    """API endpoint to get current network status."""
+    try:
+        status = network_manager.get_current_status()
+        return jsonify({
+            'mode': status.mode.value,
+            'ssid': status.ssid,
+            'ip_address': status.ip_address,
+            'connected_clients': status.connected_clients,
+            'signal_strength': status.signal_strength,
+            'is_internet_available': status.is_internet_available,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/network/toggle', methods=['POST'])
+def api_network_toggle():
+    """API endpoint to toggle network mode."""
+    try:
+        success = network_manager.toggle_mode()
+        if success:
+            return jsonify({'success': True, 'message': 'Network mode toggle initiated'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to toggle network mode'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/network/wifi', methods=['POST'])
+def api_switch_to_wifi():
+    """API endpoint to switch to WiFi mode."""
+    try:
+        success = network_manager.switch_to_wifi_mode()
+        if success:
+            return jsonify({'success': True, 'message': 'Switching to WiFi mode'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to switch to WiFi mode'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/network/ap', methods=['POST'])
+def api_switch_to_ap():
+    """API endpoint to switch to AP mode."""
+    try:
+        success = network_manager.switch_to_ap_mode(manual=True)
+        if success:
+            return jsonify({'success': True, 'message': 'Switching to AP mode'})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to switch to AP mode'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/network/status')
+def network_status_page():
+    """Show network status on E-Ink display and web page."""
+    try:
+        status = network_manager.get_current_status()
+        
+        # Show on E-Ink display
+        display_manager.show_network_status(status)
+        
+        flash('Network status displayed on E-Ink screen', 'info')
+        return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Error displaying network status: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
 if __name__ == '__main__':
+    # Initialize network management
+    logger.info("Starting InkyRemote with network management...")
+    if not initialize_network_management():
+        logger.error("Failed to initialize network management - starting without network features")
+    
     # Create the HTML template
     template_content = '''<!DOCTYPE html>
 <html lang="en">
@@ -544,6 +770,22 @@ if __name__ == '__main__':
                 {% else %}
                     No image currently displayed
                 {% endif %}
+                
+                {% if network_status %}
+                    <br>
+                    Network: 
+                    {% if network_status.mode.value == 'wifi' %}
+                        📶 WiFi ({{ network_status.ssid or 'Unknown' }})
+                        {% if network_status.ip_address %} - {{ network_status.ip_address }}{% endif %}
+                    {% elif network_status.mode.value == 'access_point' %}
+                        📡 Access Point ({{ network_status.ssid }})
+                        {% if network_status.connected_clients > 0 %} - {{ network_status.connected_clients }} connected{% endif %}
+                    {% elif network_status.mode.value == 'transitioning' %}
+                        🔄 Switching modes...
+                    {% else %}
+                        ❓ Unknown status
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
     </header>
@@ -568,6 +810,20 @@ if __name__ == '__main__':
                 </div>
                 <input type="hidden" name="crop_data" id="crop-data">
             </form>
+        </div>
+        
+        <div class="upload-section">
+            <h2>Network Controls</h2>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="showNetworkStatus()">Show Network Status</button>
+                <button class="btn btn-secondary" onclick="toggleNetworkMode()">Toggle WiFi/AP Mode</button>
+                <button class="btn btn-success" onclick="switchToWiFi()">Force WiFi Mode</button>
+                <button class="btn" style="background-color: #3498db; color: white;" onclick="switchToAP()">Force AP Mode</button>
+            </div>
+            <div style="text-align: center; font-size: 0.9rem; color: #666;">
+                <p><strong>Physical Button Controls:</strong></p>
+                <p>Button A: Toggle WiFi/AP • Button B: Show Status • Hold C: WiFi • Hold D: AP</p>
+            </div>
         </div>
         
         <div class="crop-container" id="crop-container">
@@ -775,6 +1031,81 @@ if __name__ == '__main__':
                 e.preventDefault();
             }
         });
+        
+        // Network control functions
+        function showNetworkStatus() {
+            window.location.href = "{{ url_for('network_status_page') }}";
+        }
+        
+        function toggleNetworkMode() {
+            fetch("{{ url_for('api_network_toggle') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Network mode toggle initiated');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert('Failed to toggle network mode: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error toggling network mode');
+            });
+        }
+        
+        function switchToWiFi() {
+            if (confirm('Force switch to WiFi mode?')) {
+                fetch("{{ url_for('api_switch_to_wifi') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Switching to WiFi mode...');
+                        setTimeout(() => location.reload(), 3000);
+                    } else {
+                        alert('Failed to switch to WiFi: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error switching to WiFi mode');
+                });
+            }
+        }
+        
+        function switchToAP() {
+            if (confirm('Force switch to Access Point mode?')) {
+                fetch("{{ url_for('api_switch_to_ap') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Switching to AP mode...');
+                        setTimeout(() => location.reload(), 3000);
+                    } else {
+                        alert('Failed to switch to AP: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error switching to AP mode');
+                });
+            }
+        }
     </script>
 </body>
 </html>'''
