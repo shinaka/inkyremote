@@ -96,8 +96,20 @@ install_python_deps() {
     # Install Python packages
     apt install -y python3 python3-pip python3-venv
     
-    # Install system packages for GPIO
-    apt install -y python3-gpiod python3-pil python3-flask python3-requests
+    # Install system packages for GPIO and web framework
+    apt install -y python3-pil python3-flask python3-requests
+    
+    # Try to install GPIO packages (different names on different Pi OS versions)
+    if apt list python3-gpiod 2>/dev/null | grep -q python3-gpiod; then
+        log "Installing python3-gpiod..."
+        apt install -y python3-gpiod
+    elif apt list python3-libgpiod 2>/dev/null | grep -q python3-libgpiod; then
+        log "Installing python3-libgpiod..."
+        apt install -y python3-libgpiod  
+    else
+        warning "GPIO library not found in apt, will install via pip..."
+        pip3 install gpiod --break-system-packages 2>/dev/null || pip3 install gpiod
+    fi
     
     success "Python dependencies installed"
 }
@@ -106,18 +118,26 @@ test_networkmanager_hotspot() {
     log "Testing NetworkManager hotspot functionality..."
     
     # Test if we can create a hotspot
-    if nmcli device wifi hotspot --help >/dev/null 2>&1; then
+    if command -v nmcli >/dev/null && nmcli device wifi hotspot --help >/dev/null 2>&1; then
         success "NetworkManager hotspot support confirmed"
     else
-        warning "NetworkManager hotspot command not available"
+        error "NetworkManager hotspot command not available"
+        error "Make sure NetworkManager is installed and running"
         return 1
     fi
     
+    # Check if wlan0 device exists
+    if nmcli device status | grep -q wlan0; then
+        success "wlan0 device found"
+    else
+        warning "wlan0 device not found - check WiFi adapter"
+    fi
+    
     # Check if device supports AP mode
-    if iw list 2>/dev/null | grep -q "AP"; then
+    if command -v iw >/dev/null && iw list 2>/dev/null | grep -q "AP"; then
         success "WiFi device supports AP mode"
     else
-        warning "WiFi device AP mode support unclear"
+        warning "Could not verify AP mode support (this may still work)"
     fi
 }
 
