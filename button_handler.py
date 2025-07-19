@@ -165,16 +165,25 @@ class ButtonHandler:
         
         try:
             while self._should_monitor:
-                # Read edge events with timeout
-                events = self.request.read_edge_events(timeout=1.0)
+                # Read edge events (no timeout parameter for compatibility)
+                try:
+                    events = self.request.read_edge_events()
+                    
+                    for event in events:
+                        if event.event_type == Edge.FALLING:
+                            # Button pressed (falling edge due to pull-up)
+                            self._handle_button_press(event)
+                        elif event.event_type == Edge.RISING:
+                            # Button released (rising edge due to pull-up)
+                            self._handle_button_release(event)
+                            
+                except Exception as e:
+                    # Handle case where no events are available
+                    if "would block" not in str(e).lower():
+                        logger.error(f"Error reading GPIO events: {e}")
                 
-                for event in events:
-                    if event.event_type == Edge.FALLING:
-                        # Button pressed (falling edge due to pull-up)
-                        self._handle_button_press(event)
-                    elif event.event_type == Edge.RISING:
-                        # Button released (rising edge due to pull-up)
-                        self._handle_button_release(event)
+                # Small sleep to prevent busy waiting
+                time.sleep(0.1)
                         
         except Exception as e:
             logger.error(f"Error in button monitoring loop: {e}")
