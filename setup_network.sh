@@ -76,22 +76,26 @@ driver=nl80211
 # Network name
 ssid=InkyRemote
 
-# Network mode (g = IEEE 802.11g)
+# Country code (required for regulatory compliance)
+country_code=US
+
+# Network mode (g = IEEE 802.11g, n = 802.11n)
 hw_mode=g
+ieee80211n=1
 
-# Channel to use
-channel=7
+# Channel to use (1-11 for 2.4GHz in US)
+channel=6
 
-# Enable WMM
-wmm_enabled=0
+# Enable WMM (required for modern devices)
+wmm_enabled=1
 
-# Enable 40MHz channels with 20ns guard interval
+# MAC address access control
 macaddr_acl=0
 
-# Accept all MAC addresses
+# Authentication algorithms
 auth_algs=1
 
-# Use WPA authentication
+# Broadcast SSID (0 = broadcast, 1 = hidden)
 ignore_broadcast_ssid=0
 
 # Use WPA2
