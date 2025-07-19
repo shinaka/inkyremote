@@ -9,7 +9,6 @@ Type=simple
 User=jweinhart
 Group=jweinhart
 WorkingDirectory=/home/jweinhart/inkyremote
-ExecStartPre=/home/jweinhart/inkyremote/deploy.sh
 ExecStart=/home/jweinhart/.virtualenvs/pimoroni/bin/python inkyremote.py
 Restart=always
 RestartSec=10
