@@ -179,14 +179,18 @@ class ButtonHandler:
                             
                 except Exception as e:
                     # Handle case where no events are available
-                    if "would block" not in str(e).lower():
+                    logger.debug(f"GPIO event read exception: {e}")
+                    if "would block" not in str(e).lower() and "timeout" not in str(e).lower():
                         logger.error(f"Error reading GPIO events: {e}")
+                        # Break the loop on serious errors to prevent silent failures
+                        break
                 
                 # Small sleep to prevent busy waiting
                 time.sleep(0.5)
                         
         except Exception as e:
             logger.error(f"Error in button monitoring loop: {e}")
+            logger.error("Button monitoring thread crashed - this explains why buttons don't work")
         finally:
             logger.info("Button monitoring stopped")
     
@@ -244,6 +248,12 @@ class ButtonHandler:
         
         logger.info("Button monitoring thread started")
         return True
+    
+    def is_monitoring(self):
+        """Check if button monitoring is currently active."""
+        return (self._monitoring_thread and 
+                self._monitoring_thread.is_alive() and 
+                self._should_monitor)
     
     def stop_monitoring(self):
         """Stop button monitoring."""
