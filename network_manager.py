@@ -314,18 +314,22 @@ class NetworkManager:
                 is_internet_available=self._test_internet_connection()
             )
         elif self._current_mode == NetworkMode.AP:
-            # Get actual hotspot IP from NetworkManager
-            ap_ip = "Unknown"
+            # Get NetworkManager hotspot IP address
+            ap_ip = "10.42.0.1"  # Default NetworkManager hotspot IP
+            
+            # Try to get the actual IP from the interface
             success, output = self._run_command("ip addr show wlan0", suppress_errors=True)
             if success:
-                # Look for inet address that's not 192.168.1.x (assuming that's home WiFi)
                 import re
+                # Look for NetworkManager hotspot IP ranges (10.42.0.x or similar)
                 matches = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)/\d+', output)
                 for ip in matches:
-                    if not ip.startswith('192.168.1.'):  # Skip home WiFi subnet
+                    # NetworkManager typically uses 10.42.0.x range for hotspots
+                    if ip.startswith('10.42.') or ip.startswith('172.20.') or ip.startswith('192.168.4.'):
                         ap_ip = ip
                         break
             
+            logger.info(f"AP mode IP: {ap_ip}")
             return NetworkStatus(
                 mode=NetworkMode.AP,
                 ssid=self.ap_ssid,

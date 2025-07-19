@@ -178,19 +178,26 @@ class DisplayManager:
                 
         elif status.mode == NetworkMode.AP:
             # Access Point details
-            draw.text((self.margin, y), "Access Point:", font=self._fonts['header'], fill=self.colors['black'])
+            draw.text((self.margin, y), "Access Point Active:", font=self._fonts['header'], fill=self.colors['blue'])
             y += self.header_font_size + 5
             
-            details = [
-                f"Network Name: {status.ssid}",
-                f"IP Address: {status.ip_address}",
-                f"Connected Devices: {status.connected_clients}",
-                "Password: inkyremote123",
-            ]
+            # Connection info (highlighted)
+            draw.text((self.margin + 20, y), f"WiFi: {status.ssid}", font=self._fonts['body'], fill=self.colors['black'])
+            y += self.body_font_size + 3
             
-            for detail in details:
-                draw.text((self.margin + 20, y), detail, font=self._fonts['body'], fill=self.colors['black'])
-                y += self.body_font_size + 3
+            draw.text((self.margin + 20, y), f"Password: inkyremote123", font=self._fonts['body'], fill=self.colors['black'])
+            y += self.body_font_size + 8
+            
+            # Connection URL (prominent)
+            draw.text((self.margin + 20, y), f"🌐 Connect to: http://{status.ip_address}:5000", font=self._fonts['header'], fill=self.colors['blue'])
+            y += self.header_font_size + 8
+            
+            # Additional details
+            draw.text((self.margin + 20, y), f"IP Address: {status.ip_address}", font=self._fonts['body'], fill=self.colors['black'])
+            y += self.body_font_size + 3
+            
+            draw.text((self.margin + 20, y), f"Connected Devices: {status.connected_clients}", font=self._fonts['body'], fill=self.colors['black'])
+            y += self.body_font_size + 3
                 
         y += 20
         
