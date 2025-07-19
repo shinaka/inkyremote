@@ -190,10 +190,11 @@ class NetworkManager:
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop WiFi services (simple approach - let watchdog handle NetworkManager)
-            logger.info("Stopping WiFi services...")
+            # Stop WiFi services and prevent NetworkManager auto-reconnect
+            logger.info("Stopping WiFi services and unmanaging interface...")
+            self._run_command("sudo nmcli device disconnect wlan0", suppress_errors=True)  # Clean disconnect
+            self._run_command("sudo nmcli device set wlan0 managed no", suppress_errors=True)  # Stop managing
             self._run_command("sudo systemctl stop wpa_supplicant", suppress_errors=True)
-            self._run_command("sudo wpa_cli -i wlan0 disconnect", suppress_errors=True)
             self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
             time.sleep(3)
             
@@ -281,8 +282,9 @@ class NetworkManager:
                 self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
                 self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
             
-            # Start WiFi services (simple approach)
-            logger.info("Starting WiFi services...")
+            # Re-enable NetworkManager management and start WiFi services
+            logger.info("Re-enabling interface management and starting WiFi services...")
+            self._run_command("sudo nmcli device set wlan0 managed yes", suppress_errors=True)  # Re-manage interface
             self._run_command("sudo systemctl start wpa_supplicant", suppress_errors=True)
             
             # Restart networking services (adapt for dhclient system)
