@@ -50,6 +50,7 @@ class NetworkManager:
         self._monitoring_thread = None
         self._should_monitor = False
         self._manual_ap_mode = False  # Flag to track manual AP mode activation
+        self._manual_control = False  # Flag to disable automatic monitoring completely
         
         # Configuration file paths
         self.hostapd_conf = "/etc/hostapd/hostapd.conf"
@@ -355,9 +356,15 @@ class NetworkManager:
             self._notify_status_change(status)
         return success
     
-    def switch_to_wifi_mode(self) -> bool:
+    def switch_to_wifi_mode(self, manual: bool = False) -> bool:
         """Switch to WiFi mode."""
-        self._manual_ap_mode = False
+        if not manual:
+            # Only reset manual modes if this is an automatic switch
+            self._manual_ap_mode = False
+            self._manual_control = False
+        else:
+            # Keep manual control active but clear manual AP mode
+            self._manual_ap_mode = False
         
         if self._current_mode == NetworkMode.WIFI and self.check_wifi_connectivity():
             logger.info("Already connected to WiFi")
@@ -371,10 +378,20 @@ class NetworkManager:
     
     def toggle_mode(self) -> bool:
         """Toggle between WiFi and AP mode."""
+        # Enable manual control to prevent automatic switching
+        self._manual_control = True
+        
         if self._current_mode == NetworkMode.WIFI:
             return self.switch_to_ap_mode(manual=True)
         else:
-            return self.switch_to_wifi_mode()
+            return self.switch_to_wifi_mode(manual=True)
+    
+    def enable_automatic_mode(self) -> bool:
+        """Enable automatic network mode switching."""
+        logger.info("Enabling automatic network mode switching")
+        self._manual_control = False
+        self._manual_ap_mode = False
+        return True
     
     def _monitoring_loop(self):
         """Background monitoring loop."""
@@ -382,8 +399,8 @@ class NetworkManager:
         
         while self._should_monitor:
             try:
-                # Skip monitoring if in manual AP mode
-                if self._manual_ap_mode:
+                # Skip monitoring if in manual control mode
+                if self._manual_control or self._manual_ap_mode:
                     time.sleep(self.check_interval)
                     continue
                 

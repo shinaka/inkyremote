@@ -109,7 +109,7 @@ def setup_button_callbacks():
     
     def on_wifi_mode(button_label: str):
         logger.info(f"Button {button_label}: Forcing WiFi mode")
-        success = network_manager.switch_to_wifi_mode()
+        success = network_manager.switch_to_wifi_mode(manual=True)
         if success:
             display_manager.show_message(
                 "WiFi Mode", 
@@ -416,7 +416,7 @@ def api_network_toggle():
 def api_switch_to_wifi():
     """API endpoint to switch to WiFi mode."""
     try:
-        success = network_manager.switch_to_wifi_mode()
+        success = network_manager.switch_to_wifi_mode(manual=True)
         if success:
             return jsonify({'success': True, 'message': 'Switching to WiFi mode'})
         else:
