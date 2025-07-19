@@ -37,6 +37,8 @@ SupplementaryGroups=gpio spi i2c netdev
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=inkyremote
+LogLevel=debug
+LogExtraFields=SERVICE_NAME=inkyremote
 
 [Install]
 WantedBy=multi-user.target
