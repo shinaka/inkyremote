@@ -190,13 +190,14 @@ class NetworkManager:
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # COMPLETELY stop WiFi services first
-            logger.info("Stopping WiFi services...")
+            # COMPLETELY stop WiFi services first (including NetworkManager!)
+            logger.info("Stopping WiFi services and NetworkManager...")
+            self._run_command("sudo systemctl stop NetworkManager", suppress_errors=True)
             self._run_command("sudo systemctl stop wpa_supplicant", suppress_errors=True)
             self._run_command("sudo systemctl stop networking", suppress_errors=True) 
             self._run_command("sudo wpa_cli -i wlan0 disconnect", suppress_errors=True)
             self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
-            time.sleep(3)
+            time.sleep(5)  # Give more time for complete shutdown
             
             # COMPLETELY flush and reset the interface
             logger.info("Resetting network interface...")
@@ -282,8 +283,9 @@ class NetworkManager:
                 self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
                 self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
             
-            # Start WiFi services
-            logger.info("Starting WiFi services...")
+            # Start WiFi services (including NetworkManager)
+            logger.info("Starting WiFi services and NetworkManager...")
+            self._run_command("sudo systemctl start NetworkManager", suppress_errors=True)
             self._run_command("sudo systemctl start wpa_supplicant", suppress_errors=True)
             
             # Restart networking services (adapt for dhclient system)
