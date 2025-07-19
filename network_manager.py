@@ -190,15 +190,12 @@ class NetworkManager:
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # COMPLETELY stop WiFi services (disable NetworkManager WiFi instead of stopping service)
-            logger.info("Disabling WiFi in NetworkManager and stopping other WiFi services...")
-            self._run_command("sudo nmcli radio wifi off", suppress_errors=True)  # Disable WiFi in NetworkManager
-            self._run_command("sudo nmcli device set wlan0 managed no", suppress_errors=True)  # Unmanage wlan0
+            # Stop WiFi services (simple approach - let watchdog handle NetworkManager)
+            logger.info("Stopping WiFi services...")
             self._run_command("sudo systemctl stop wpa_supplicant", suppress_errors=True)
-            self._run_command("sudo systemctl stop networking", suppress_errors=True) 
             self._run_command("sudo wpa_cli -i wlan0 disconnect", suppress_errors=True)
             self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
-            time.sleep(5)  # Give more time for complete shutdown
+            time.sleep(3)
             
             # COMPLETELY flush and reset the interface
             logger.info("Resetting network interface...")
@@ -284,10 +281,8 @@ class NetworkManager:
                 self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
                 self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
             
-            # Re-enable WiFi in NetworkManager and start WiFi services  
-            logger.info("Re-enabling WiFi in NetworkManager and starting WiFi services...")
-            self._run_command("sudo nmcli device set wlan0 managed yes", suppress_errors=True)  # Re-manage wlan0
-            self._run_command("sudo nmcli radio wifi on", suppress_errors=True)  # Enable WiFi in NetworkManager
+            # Start WiFi services (simple approach)
+            logger.info("Starting WiFi services...")
             self._run_command("sudo systemctl start wpa_supplicant", suppress_errors=True)
             
             # Restart networking services (adapt for dhclient system)

@@ -159,10 +159,7 @@ emergency_wifi_restore() {
     ip addr flush dev wlan0 2>/dev/null || true
     ip link set wlan0 up 2>/dev/null || true
     
-    # Re-enable WiFi in NetworkManager and restart services
-    nmcli device set wlan0 managed yes 2>/dev/null || true
-    nmcli radio wifi on 2>/dev/null || true
-    systemctl restart networking
+    # Restart WiFi services (simple approach)
     systemctl restart wpa_supplicant
     
     # Wait for connection
@@ -335,10 +332,7 @@ test_network_switching_full() {
         ip addr flush dev wlan0
         ip link set wlan0 up
         
-        # Re-enable WiFi in NetworkManager and restart services
-        nmcli device set wlan0 managed yes 2>/dev/null || true
-        nmcli radio wifi on 2>/dev/null || true
-        systemctl restart networking  
+        # Restart WiFi services (simple approach)
         systemctl restart wpa_supplicant
         
         # Try dhclient directly as backup
@@ -381,10 +375,7 @@ emergency_wifi_fix() {
     ip route flush dev wlan0 2>/dev/null || true
     ip link set wlan0 up 2>/dev/null || true
     
-    # Re-enable WiFi in NetworkManager and restart services
-    nmcli device set wlan0 managed yes 2>/dev/null || true
-    nmcli radio wifi on 2>/dev/null || true
-    systemctl restart networking
+    # Restart WiFi services (simple approach)
     systemctl restart wpa_supplicant
     
     # Try dhclient directly
