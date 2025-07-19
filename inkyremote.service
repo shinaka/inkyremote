@@ -1,0 +1,17 @@
+[Unit]
+Description=Inky Remote Web Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=jweinhart
+WorkingDirectory=/home/jweinhart/inkyremote
+ExecStartPre=/home/jweinhart/inkyremote/deploy.sh
+ExecStart=/home/jweinhart/.virtualenvs/pimoroni/bin/python inkyremote.py
+Restart=always
+RestartSec=5
+Environment=PATH=/home/jweinhart/.virtualenvs/pimoroni/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
