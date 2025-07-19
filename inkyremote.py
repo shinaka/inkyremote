@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import uuid
 import json
 import atexit
@@ -170,6 +171,12 @@ def cleanup_network_management():
     try:
         network_manager.stop_monitoring()
         button_handler.cleanup()
+        
+        # Clean up PID file
+        pidfile = '/tmp/inkyremote.pid'
+        if os.path.exists(pidfile):
+            os.remove(pidfile)
+            
         logger.info("Network management cleanup completed")
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")
@@ -445,6 +452,30 @@ def network_status_page():
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
+    # Check for existing instances using simple PID file
+    pidfile = '/tmp/inkyremote.pid'
+    if os.path.exists(pidfile):
+        try:
+            with open(pidfile, 'r') as f:
+                old_pid = int(f.read().strip())
+            
+            # Check if process still exists
+            try:
+                os.kill(old_pid, 0)  # Signal 0 just checks if process exists
+                logger.error(f"InkyRemote already running (PID: {old_pid}). Exiting to prevent conflicts.")
+                logger.error("Stop existing instances first: sudo systemctl stop inkyremote.service")
+                sys.exit(1)
+            except OSError:
+                # Process doesn't exist, remove stale PID file
+                os.remove(pidfile)
+        except (ValueError, IOError):
+            # Bad PID file, remove it
+            os.remove(pidfile)
+    
+    # Write our PID
+    with open(pidfile, 'w') as f:
+        f.write(str(os.getpid()))
+    
     # Initialize network management
     logger.info("Starting InkyRemote with network management...")
     if not initialize_network_management():
@@ -1117,4 +1148,4 @@ if __name__ == '__main__':
     
     print("InkyRemote starting...")
     print("Open your browser and go to http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
