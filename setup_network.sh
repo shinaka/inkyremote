@@ -255,12 +255,7 @@ configure_sudo_permissions() {
     # Allow the service user to run network commands without password
     cat > /etc/sudoers.d/inkyremote-network << 'EOF'
 # Allow inkyremote user to manage network services without password
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl start hostapd
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop hostapd
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart hostapd
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl start dnsmasq
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop dnsmasq
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart dnsmasq
+# Removed hostapd and dnsmasq permissions - using NetworkManager native hotspot
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl start wpa_supplicant
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop wpa_supplicant
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart wpa_supplicant
@@ -269,6 +264,10 @@ jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop networking
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart networking
 jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli device disconnect *
 jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli device set *
+jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli device wifi hotspot *
+jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli connection down *
+jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli connection delete *
+jweinhart ALL=(root) NOPASSWD: /usr/bin/nmcli connection show *
 jweinhart ALL=(root) NOPASSWD: /sbin/dhclient *
 jweinhart ALL=(root) NOPASSWD: /sbin/ip *
 jweinhart ALL=(root) NOPASSWD: /usr/sbin/wpa_cli *
@@ -327,8 +326,8 @@ main() {
     check_root
     update_system
     install_packages
-    configure_hostapd
-    configure_dnsmasq
+    # configure_hostapd  # Not needed - using NetworkManager native hotspot
+    # configure_dnsmasq  # Not needed - using NetworkManager native hotspot
     configure_networking
     configure_iptables
     install_python_deps

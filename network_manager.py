@@ -185,82 +185,71 @@ class NetworkManager:
         return 0
     
     def start_access_point(self) -> bool:
-        """Start Access Point mode."""
-        logger.info("Starting Access Point mode...")
+        """Start Access Point mode using NetworkManager native hotspot."""
+        logger.info("Starting NetworkManager hotspot...")
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop WiFi services and prevent NetworkManager auto-reconnect
-            logger.info("Stopping WiFi services and unmanaging interface...")
-            self._run_command("sudo nmcli device disconnect wlan0", suppress_errors=True)  # Clean disconnect
-            self._run_command("sudo nmcli device set wlan0 managed no", suppress_errors=True)  # Stop managing
-            self._run_command("sudo systemctl stop wpa_supplicant", suppress_errors=True)
-            self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
-            time.sleep(3)
-            
-            # COMPLETELY flush and reset the interface
-            logger.info("Resetting network interface...")
-            success, _ = self._run_command(f"sudo ip link set {self.wifi_interface} down")
-            success, _ = self._run_command(f"sudo ip addr flush dev {self.wifi_interface}")
-            success, _ = self._run_command(f"sudo ip link set {self.wifi_interface} up")
+            # Remove any existing hotspot connections first
+            logger.info("Cleaning up existing hotspot connections...")
+            self._run_command("sudo nmcli connection delete Hotspot", suppress_errors=True)
             time.sleep(2)
-                
-            # Set static IP for AP mode
-            success, _ = self._run_command(f"sudo ip addr add 192.168.4.1/24 dev {self.wifi_interface}")
+            
+            # Create NetworkManager native hotspot
+            logger.info(f"Creating NetworkManager hotspot: {self.ap_ssid}")
+            success, output = self._run_command(
+                f"sudo nmcli device wifi hotspot ssid {self.ap_ssid} password {self.ap_password} ifname {self.wifi_interface} band bg"
+            )
+            
             if not success:
-                logger.error("Failed to set static IP")
+                logger.error(f"Failed to create NetworkManager hotspot: {output}")
+                self._current_mode = NetworkMode.UNKNOWN
                 return False
             
-            # Start hostapd
-            success, _ = self._run_command("sudo systemctl start hostapd")
-            if not success:
-                logger.error("Failed to start hostapd")
-                return False
+            # Wait for hotspot to initialize
+            time.sleep(5)
             
-            # Start dnsmasq
-            success, _ = self._run_command("sudo systemctl start dnsmasq")
-            if not success:
-                logger.error("Failed to start dnsmasq")
-                # Stop hostapd if dnsmasq failed
-                self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
+            # Verify hotspot is active
+            success, output = self._run_command("sudo nmcli connection show --active")
+            if "Hotspot" not in output:
+                logger.error("Hotspot connection not found in active connections")
+                logger.warning(f"Active connections: {output}")
+                self._current_mode = NetworkMode.UNKNOWN
                 return False
-            
-            # Enable IP forwarding
-            self._run_command("sudo sysctl net.ipv4.ip_forward=1", suppress_errors=True)
             
             self._current_mode = NetworkMode.AP
-            logger.info("Access Point mode started successfully")
+            logger.info("NetworkManager hotspot started successfully")
             return True
             
         except Exception as e:
-            logger.error(f"Error starting Access Point: {e}")
+            logger.error(f"Error starting NetworkManager hotspot: {e}")
             self._current_mode = NetworkMode.UNKNOWN
             return False
     
     def stop_access_point(self) -> bool:
-        """Stop Access Point mode."""
-        logger.info("Stopping Access Point mode...")
+        """Stop NetworkManager hotspot."""
+        logger.info("Stopping NetworkManager hotspot...")
         self._current_mode = NetworkMode.TRANSITIONING
         
         try:
-            # Stop AP services
-            logger.info("Stopping AP services...")
-            self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
-            self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
-            time.sleep(2)
+            # Find and stop hotspot connection
+            success, output = self._run_command("sudo nmcli connection show --active", suppress_errors=True)
+            if "Hotspot" in output:
+                logger.info("Stopping active hotspot connection...")
+                success, output = self._run_command("sudo nmcli connection down Hotspot")
+                if not success:
+                    logger.warning(f"Failed to stop hotspot: {output}")
+            else:
+                logger.info("No active hotspot found")
             
-            # Reset network interface completely
-            logger.info("Resetting network interface...")
-            self._run_command(f"sudo ip link set {self.wifi_interface} down", suppress_errors=True)
-            self._run_command(f"sudo ip addr flush dev {self.wifi_interface}", suppress_errors=True)
-            self._run_command(f"sudo ip link set {self.wifi_interface} up", suppress_errors=True)
-            time.sleep(2)
+            # Delete hotspot connection completely to clean up
+            self._run_command("sudo nmcli connection delete Hotspot", suppress_errors=True)
             
-            logger.info("Access Point mode stopped")
+            logger.info("NetworkManager hotspot stopped")
             return True
             
         except Exception as e:
-            logger.error(f"Error stopping Access Point: {e}")
+            logger.error(f"Error stopping NetworkManager hotspot: {e}")
             return False
     
     def connect_to_wifi(self) -> bool:
@@ -274,18 +263,11 @@ class NetworkManager:
         try:
             # Stop AP mode if it was running
             if was_ap_mode:
-                logger.info("Stopping AP mode before switching to WiFi...")
+                logger.info("Stopping hotspot before switching to WiFi...")
                 self.stop_access_point()
-            else:
-                # Still stop any potentially running AP services
-                logger.info("Ensuring AP services are stopped...")
-                self._run_command("sudo systemctl stop hostapd", suppress_errors=True)
-                self._run_command("sudo systemctl stop dnsmasq", suppress_errors=True)
             
-            # Re-enable NetworkManager management and start WiFi services
-            logger.info("Re-enabling interface management and starting WiFi services...")
-            self._run_command("sudo nmcli device set wlan0 managed yes", suppress_errors=True)  # Re-manage interface
-            self._run_command("sudo systemctl start wpa_supplicant", suppress_errors=True)
+            # NetworkManager will automatically handle WiFi reconnection
+            logger.info("Waiting for NetworkManager to reconnect to WiFi...")
             
             # Restart networking services (adapt for dhclient system)
             success, _ = self._run_command("sudo systemctl restart networking")
@@ -332,10 +314,22 @@ class NetworkManager:
                 is_internet_available=self._test_internet_connection()
             )
         elif self._current_mode == NetworkMode.AP:
+            # Get actual hotspot IP from NetworkManager
+            ap_ip = "Unknown"
+            success, output = self._run_command("ip addr show wlan0", suppress_errors=True)
+            if success:
+                # Look for inet address that's not 192.168.1.x (assuming that's home WiFi)
+                import re
+                matches = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)/\d+', output)
+                for ip in matches:
+                    if not ip.startswith('192.168.1.'):  # Skip home WiFi subnet
+                        ap_ip = ip
+                        break
+            
             return NetworkStatus(
                 mode=NetworkMode.AP,
                 ssid=self.ap_ssid,
-                ip_address="192.168.4.1",
+                ip_address=ap_ip,
                 connected_clients=self.get_ap_clients(),
                 is_internet_available=False
             )
