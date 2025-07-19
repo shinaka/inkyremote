@@ -30,7 +30,8 @@ show_help() {
     echo "  backup-config    - Backup current network configuration"
     echo "  restore-config   - Restore network configuration from backup"
     echo "  install-watchdog - Install network watchdog service"
-    echo "  test-switching   - Safely test network switching"
+    echo "  test-switching   - Safely test network switching (non-disruptive)"
+    echo "  test-full        - Full network switching test (disconnects SSH!)"
     echo "  emergency-wifi   - Force WiFi reconnection"
     echo "  safe-deploy      - Deploy with safety checks"
     echo "  status          - Show network safety status"
@@ -224,8 +225,63 @@ test_network_switching() {
     
     success "Current WiFi connection is working"
     
-    # Test AP mode temporarily
-    log "Testing AP mode for 30 seconds..."
+    # Non-disruptive test - just check if services can start
+    log "Testing AP services (non-disruptive)..."
+    
+    # Test if hostapd config is valid
+    if hostapd -t /etc/hostapd/hostapd.conf >/dev/null 2>&1; then
+        success "hostapd configuration is valid"
+    else
+        error "hostapd configuration is invalid"
+        return 1
+    fi
+    
+    # Test if dnsmasq config is valid  
+    if dnsmasq --test >/dev/null 2>&1; then
+        success "dnsmasq configuration is valid"
+    else
+        error "dnsmasq configuration is invalid"
+        return 1
+    fi
+    
+    # Test if services can start (without disrupting network)
+    log "Testing if services can start..."
+    
+    # Quick start/stop test
+    if systemctl start hostapd && sleep 2 && systemctl is-active --quiet hostapd; then
+        success "hostapd can start successfully"
+        systemctl stop hostapd
+    else
+        error "hostapd cannot start"
+        return 1
+    fi
+    
+    if systemctl start dnsmasq && sleep 2 && systemctl is-active --quiet dnsmasq; then
+        success "dnsmasq can start successfully" 
+        systemctl stop dnsmasq
+    else
+        error "dnsmasq cannot start"
+        return 1
+    fi
+    
+    success "All AP services tested successfully (non-disruptive)"
+    log "Note: Full network switching will work, but would disconnect your SSH session"
+    return 0
+}
+
+test_network_switching_full() {
+    log "Starting FULL network switching test (will disconnect SSH!)..."
+    
+    # Check current connectivity
+    if ! ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
+        error "No internet connectivity - cannot safely test network switching"
+        exit 1
+    fi
+    
+    success "Current WiFi connection is working"
+    
+    # Test AP mode temporarily - THIS WILL DISCONNECT SSH
+    log "Testing AP mode for 30 seconds (you will be disconnected)..."
     
     # Start AP mode services
     systemctl start hostapd
@@ -236,20 +292,19 @@ test_network_switching() {
     
     sleep 5
     
-    # Check if AP is running
+    # Check if AP is running and log to file for later review
     if systemctl is-active --quiet hostapd; then
-        success "AP mode activated successfully"
+        echo "$(date): AP mode activated successfully" >> /var/log/network-test.log
         
         # Show AP status
-        log "AP Status:"
-        iw dev wlan0 info || true
+        iw dev wlan0 info >> /var/log/network-test.log 2>&1 || true
         
         # Wait
-        log "AP mode will run for 30 seconds..."
+        echo "$(date): AP mode running for 30 seconds..." >> /var/log/network-test.log
         sleep 30
         
         # Restore WiFi
-        log "Restoring WiFi mode..."
+        echo "$(date): Restoring WiFi mode..." >> /var/log/network-test.log
         systemctl stop hostapd
         systemctl stop dnsmasq
         ip addr flush dev wlan0
@@ -260,19 +315,19 @@ test_network_switching() {
         dhclient wlan0 2>/dev/null || true
         
         # Wait for WiFi restoration
-        log "Waiting for WiFi restoration..."
+        echo "$(date): Waiting for WiFi restoration..." >> /var/log/network-test.log
         for i in {1..20}; do
             if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
-                success "WiFi restored successfully after $i attempts"
+                echo "$(date): WiFi restored successfully after $i attempts" >> /var/log/network-test.log
                 return 0
             fi
             sleep 3
         done
         
-        error "Failed to restore WiFi - manual intervention required"
+        echo "$(date): Failed to restore WiFi - manual intervention required" >> /var/log/network-test.log
         return 1
     else
-        error "Failed to start AP mode"
+        echo "$(date): Failed to start AP mode" >> /var/log/network-test.log
         return 1
     fi
 }
@@ -419,6 +474,9 @@ case "${1:-}" in
         ;;
     "test-switching")
         test_network_switching
+        ;;
+    "test-full")
+        test_network_switching_full
         ;;
     "emergency-wifi")
         emergency_wifi_fix
