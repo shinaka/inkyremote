@@ -84,8 +84,12 @@ restore_network_config() {
     fi
     
     # Restart networking
-    systemctl restart dhcpcd
+    systemctl restart networking
     systemctl restart wpa_supplicant
+    
+    # Try dhclient directly as backup
+    dhclient -r wlan0 2>/dev/null || true
+    dhclient wlan0 2>/dev/null || true
     
     success "Network configuration restored. Rebooting in 5 seconds..."
     sleep 5
@@ -249,7 +253,11 @@ test_network_switching() {
         systemctl stop hostapd
         systemctl stop dnsmasq
         ip addr flush dev wlan0
-        systemctl restart dhcpcd
+        systemctl restart networking
+        
+        # Try dhclient directly as backup
+        dhclient -r wlan0 2>/dev/null || true
+        dhclient wlan0 2>/dev/null || true
         
         # Wait for WiFi restoration
         log "Waiting for WiFi restoration..."
@@ -286,8 +294,12 @@ emergency_wifi_fix() {
     ip route flush dev wlan0 2>/dev/null || true
     
     # Restart core networking
-    systemctl restart dhcpcd
+    systemctl restart networking
     systemctl restart wpa_supplicant
+    
+    # Try dhclient directly
+    dhclient -r wlan0 2>/dev/null || true
+    dhclient wlan0 2>/dev/null || true
     
     # Wait for connection
     log "Waiting for WiFi connection..."

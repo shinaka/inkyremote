@@ -267,12 +267,16 @@ class NetworkManager:
             if self._current_mode == NetworkMode.AP:
                 self.stop_access_point()
             
-            # Restart dhcpcd to get dynamic IP
-            success, _ = self._run_command("sudo systemctl restart dhcpcd")
+            # Restart networking services (adapt for dhclient system)
+            success, _ = self._run_command("sudo systemctl restart networking")
             if not success:
-                logger.warning("Failed to restart dhcpcd")
+                # Try dhclient directly if networking service fails
+                self._run_command("sudo dhclient -r wlan0", suppress_errors=True)
+                success, _ = self._run_command("sudo dhclient wlan0")
+                if not success:
+                    logger.warning("Failed to restart networking services")
             
-            # Wait a moment for dhcpcd to initialize
+            # Wait a moment for networking to initialize
             time.sleep(3)
             
             # Try to reconnect to WiFi

@@ -50,7 +50,11 @@ recover_wifi() {
     
     # Restart networking services
     systemctl restart wpa_supplicant
-    systemctl restart dhcpcd
+    systemctl restart networking
+    
+    # Also try dhclient directly
+    dhclient -r wlan0 2>/dev/null || true
+    dhclient wlan0 2>/dev/null || true
     
     # Wait and check
     sleep 15

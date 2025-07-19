@@ -150,23 +150,21 @@ EOF
     success "dnsmasq configured"
 }
 
-# Configure dhcpcd
-configure_dhcpcd() {
-    log "Configuring dhcpcd..."
+# Configure networking (dhclient system)
+configure_networking() {
+    log "Configuring networking for dhclient system..."
     
-    # Backup original config
-    cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup
+    # Check if we have interfaces file
+    if [ -f /etc/network/interfaces ]; then
+        # Backup original config
+        cp /etc/network/interfaces /etc/network/interfaces.backup
+        log "Backed up /etc/network/interfaces"
+    fi
     
-    # Append our configuration (preserve existing config)
-    cat >> /etc/dhcpcd.conf << 'EOF'
-
-# InkyRemote network configuration
-# This will be managed automatically - do not edit manually
-
-# Static IP configuration will be set dynamically by network_manager.py
-EOF
+    # For dhclient systems, most configuration is done dynamically
+    # by the network_manager.py script
     
-    success "dhcpcd configured"
+    success "Networking configured for dhclient system"
 }
 
 # Configure iptables for NAT (optional internet sharing)
@@ -259,7 +257,8 @@ jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart hostapd
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl start dnsmasq
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl stop dnsmasq
 jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart dnsmasq
-jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart dhcpcd
+jweinhart ALL=(root) NOPASSWD: /bin/systemctl restart networking
+jweinhart ALL=(root) NOPASSWD: /sbin/dhclient *
 jweinhart ALL=(root) NOPASSWD: /sbin/ip addr *
 jweinhart ALL=(root) NOPASSWD: /sbin/ip route *
 jweinhart ALL=(root) NOPASSWD: /usr/sbin/wpa_cli *
@@ -320,7 +319,7 @@ main() {
     install_packages
     configure_hostapd
     configure_dnsmasq
-    configure_dhcpcd
+    configure_networking
     configure_iptables
     install_python_deps
     configure_sudo_permissions

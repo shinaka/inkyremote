@@ -2,9 +2,6 @@
 
 This guide ensures you can safely deploy the WiFi/AP switching features without losing access to your headless Pi Zero W2.
 
-## ⚠️ **BEFORE YOU START**
-
-Your concern about getting locked out is valid! This guide provides **multiple safety layers** to prevent that.
 
 ## 🔒 **Safety Mechanisms Included**
 
