@@ -30,6 +30,7 @@ show_help() {
     echo "  backup-config    - Backup current network configuration"
     echo "  restore-config   - Restore network configuration from backup"
     echo "  install-watchdog - Install network watchdog service"
+  echo "  update-watchdog - Update existing watchdog service"
     echo "  test-switching   - Safely test network switching (non-disruptive)"
     echo "  test-full        - Full network switching test (disconnects SSH!)"
     echo "  emergency-wifi   - Force WiFi reconnection"
@@ -97,8 +98,13 @@ restore_network_config() {
     reboot
 }
 
+update_watchdog() {
+    log "Updating network watchdog service..."
+    install_watchdog
+}
+
 install_watchdog() {
-    log "Installing network watchdog service..."
+log "Installing network watchdog service..."
     
     # Create watchdog script
     cat > /usr/local/bin/network-watchdog.sh << 'EOF'
@@ -116,6 +122,12 @@ log_msg() {
 }
 
 check_connectivity() {
+    # Skip connectivity checks if we're intentionally in AP mode
+    if systemctl is-active --quiet hostapd && ip addr show wlan0 | grep -q "192.168.4.1"; then
+        log_msg "AP mode detected - skipping connectivity check"
+        return 0  # Consider AP mode as "connected" 
+    fi
+    
     # Check if we can reach the internet
     if ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
         return 0
@@ -131,6 +143,12 @@ check_connectivity() {
 
 emergency_wifi_restore() {
     log_msg "EMERGENCY: Attempting WiFi restore"
+    
+    # Double-check we're not in intentional AP mode before restoring
+    if systemctl is-active --quiet hostapd && ip addr show wlan0 | grep -q "192.168.4.1"; then
+        log_msg "AP mode detected - NOT performing emergency restore"
+        return 0
+    fi
     
     # Stop potentially problematic services
     systemctl stop hostapd 2>/dev/null || true
@@ -488,6 +506,9 @@ case "${1:-}" in
         ;;
     "install-watchdog")
         install_watchdog
+        ;;
+    "update-watchdog")
+        update_watchdog
         ;;
     "test-switching")
         test_network_switching
